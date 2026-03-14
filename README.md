@@ -1,6 +1,115 @@
 # Telemedicine System Design Document
 
-## Task 1: Step 2 Architecture Diagram
+## Step 1: Data Design
+
+### 1. Entities และ Attributes (ข้อมูลที่จำเป็น)
+
+### User
+เก็บข้อมูลพื้นฐานของผู้ใช้งาน
+
+| Attribute | Description |
+|---|---|
+| userId (PK) | รหัสผู้ใช้งาน |
+| username | ชื่อบัญชีผู้ใช้ |
+| password | รหัสผ่าน |
+| fullName | ชื่อ-นามสกุล |
+| role | ประเภทผู้ใช้ (Patient / Doctor / Admin) |
+
+---
+
+### Patient
+ข้อมูลเพิ่มเติมเฉพาะของคนไข้
+
+| Attribute | Description |
+|---|---|
+| patientId (PK/FK) | รหัสคนไข้ |
+| bloodGroup | กรุ๊ปเลือด |
+| allergies | ประวัติการแพ้ยา/อาหาร |
+| medicalHistory | ประวัติการรักษา |
+
+---
+
+### Doctor
+ข้อมูลความเชี่ยวชาญของแพทย์
+
+| Attribute | Description |
+|---|---|
+| doctorId (PK/FK) | รหัสแพทย์ |
+| specialty | ความเชี่ยวชาญ |
+| education | ประวัติการศึกษา |
+| rating | คะแนนรีวิว |
+| isVerified | สถานะการยืนยันตัวตน |
+
+---
+
+### TimeSlot
+ช่วงเวลาที่แพทย์เปิดให้จอง
+
+| Attribute | Description |
+|---|---|
+| slotId (PK) | รหัสช่วงเวลา |
+| doctorId (FK) | รหัสแพทย์ |
+| startTime | เวลาเริ่มต้น |
+| endTime | เวลาสิ้นสุด |
+| status | สถานะ (Available / Booked) |
+
+---
+
+### Appointment
+ข้อมูลการนัดหมายและการเชื่อมต่อ Zoom
+
+| Attribute | Description |
+|---|---|
+| appId (PK) | รหัสการนัดหมาย |
+| patientId (FK) | รหัสคนไข้ |
+| doctorId (FK) | รหัสแพทย์ |
+| slotId (FK) | รหัสช่วงเวลา |
+| status | สถานะ (Pending / Confirmed / Cancelled) |
+| zoomLink | ลิงก์สำหรับการประชุม |
+
+---
+
+### MedicalRecord
+บันทึกผลการตรวจหลังจบการสนทนา
+
+| Attribute | Description |
+|---|---|
+| record_id (PK) | รหัสบันทึกการรักษา |
+| appId (FK) | รหัสการนัดหมาย |
+| diagnosis | การวินิจฉัยโรค |
+| prescription | ใบสั่งยา |
+| doctorNote | หมายเหตุจากแพทย์ |
+
+---
+
+### 2. Relationships (ความสัมพันธ์ระหว่างข้อมูล)
+
+- **User ↔ Patient / Doctor**  
+  เป็นความสัมพันธ์แบบ **Inheritance (One-to-One)**  
+  - User 1 คน จะเป็นได้ทั้ง Patient หรือ Doctor
+
+- **Doctor ↔ TimeSlot**  
+  ความสัมพันธ์แบบ **One-to-Many**  
+  - แพทย์ 1 คน สามารถสร้างช่วงเวลาว่างได้หลายช่วง
+
+- **Patient ↔ Appointment**  
+  ความสัมพันธ์แบบ **One-to-Many**  
+  - คนไข้ 1 คน สามารถมีการนัดหมายได้หลายครั้ง
+
+- **Doctor ↔ Appointment**  
+  ความสัมพันธ์แบบ **One-to-Many**  
+  - แพทย์ 1 คน สามารถรับนัดหมายจากหลายคนไข้
+
+- **TimeSlot ↔ Appointment**  
+  ความสัมพันธ์แบบ **One-to-One**  
+  - 1 ช่วงเวลาที่ถูกจอง จะสัมพันธ์กับ 1 การนัดหมายเท่านั้น  
+  - เพื่อป้องกันการจองซ้อน
+
+- **Appointment ↔ MedicalRecord**  
+  ความสัมพันธ์แบบ **One-to-One**  
+  - การนัดหมาย 1 ครั้งที่เสร็จสิ้น จะมีบันทึกการรักษาได้ 1 ฉบับ
+
+## Step 2 Architecture Diagram
 
 ### Layered Architecture
 * **Controller Layer**
@@ -50,7 +159,7 @@ telemedicine-system/
 ```
 ---
 
-## Task 2: Step 3 Contract
+## Step 3 Contract
 
 ### Request Contract (POST `/api/appointments`)
 
@@ -135,3 +244,69 @@ Expected Response
 | **app_id** | UUID (FK) | เชื่อมกับการนัดหมายที่จบไปแล้ว |
 | **rating** | Integer | คะแนน (1-5) |
 | **comment** | Text | ความคิดเห็นจากคนไข้ |
+
+## Refinement
+
+### 1. Entity: User / Patient / Doctor
+เน้นเรื่องการตรวจสอบความถูกต้องของข้อมูลพื้นฐาน
+
+### Methods
+
+| Method | Description |
+|---|---|
+| isValidPassword() | ตรวจสอบว่ารหัสผ่านมีความยาวและอักขระครบตามนโยบายความปลอดภัย |
+| getFullName() | รวมชื่อและนามสกุลเพื่อนำไปแสดงผลบนหน้า UI |
+| isMedicalVerified() | (สำหรับ Doctor) ตรวจสอบว่าใบประกอบวิชาชีพผ่านการอนุมัติหรือยัง |
+
+---
+
+### 2. Entity: TimeSlot
+เน้นเรื่องการจัดการช่วงเวลาว่างของแพทย์
+
+### Methods
+
+| Method | Description |
+|---|---|
+| isExpired() | ตรวจสอบว่าช่วงเวลานี้ผ่านเลยเวลาปัจจุบันไปแล้วหรือยัง (ถ้าผ่านแล้วจะไม่แสดงให้จอง) |
+| calculateDuration() | คำนวณระยะเวลาของ Slot เช่น 30 นาที หรือ 1 ชั่วโมง |
+| updateStatus(newStatus) | เปลี่ยนสถานะของ Slot เช่น จาก `Available` เป็น `Reserved` |
+
+---
+
+### 3. Entity: Appointment
+เน้นเรื่องการจัดการสถานะการนัดหมายและการเชื่อมต่อระบบประชุม
+
+### Methods
+
+| Method | Description |
+|---|---|
+| canCancel() | ตรวจสอบว่าคนไข้ยังสามารถยกเลิกนัดได้หรือไม่ (เช่น ต้องยกเลิกก่อนเวลาเริ่มอย่างน้อย 24 ชั่วโมง) |
+| isReadyForConsultation() | ตรวจสอบว่าถึงเวลาเข้าห้องประชุมหรือยัง (เช่น เปิดให้เข้าก่อน 5–10 นาที) |
+| updateAppointmentStatus(status) | อัปเดตสถานะ เช่น `Confirmed`, `Completed`, หรือ `Cancelled` |
+
+---
+
+### 4. Entity: MedicalRecord / Feedback
+เน้นการจัดการข้อมูลหลังการรักษา
+
+### Methods
+
+| Method | Description |
+|---|---|
+| hasPrescription() | ตรวจสอบว่าในบันทึกนี้มีใบสั่งยาแนบมาด้วยหรือไม่ |
+| isValidRating() | ตรวจสอบว่าคะแนน Feedback อยู่ในช่วง 1–5 ดาว |
+
+---
+
+## Example: Class Diagram (Refinement)
+
+```plaintext
+Appointment
+--------------------------------
+- appId: String
+- status: Enum
+- startTime: DateTime
+--------------------------------
++ canCancel(): Boolean
++ isReadyForConsultation(): Boolean
++ updateStatus(status: String)
